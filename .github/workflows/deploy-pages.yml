@@ -21,16 +21,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct site
+      - name: Reconstruct verified site
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p site
-          cat .site/site.b64.* | base64 --decode > site.tgz
-          tar -xzf site.tgz -C site
-          test -f site/index.html
-          test -f site/manifest.webmanifest
-          test -f site/sw.js
+          cat .site/index.b64.* | base64 --decode > index.html.gz
+          echo "73c6482a9bcb986b071e20583306015f20b16469d91330ddb3e444d59d882e0a  index.html.gz" | sha256sum --check -
+          gzip -dc index.html.gz > site/index.html
+          cat > site/manifest.webmanifest <<'JSON'
+          {
+            "name": "Kobus’s Retro Quiz",
+            "short_name": "Kobus Retro Quiz",
+            "description": "An animated 80s and 90s retro-radio music quiz trainer.",
+            "start_url": "./index.html",
+            "scope": "./",
+            "display": "standalone",
+            "orientation": "portrait-primary",
+            "background_color": "#060712",
+            "theme_color": "#070915"
+          }
+          JSON
+          cat > site/sw.js <<'JS'
+          const CACHE='kobus-retro-quiz-v2';
+          const SHELL=['./','./index.html','./manifest.webmanifest'];
+          self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
+          self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
+          self.addEventListener('fetch',event=>{const u=new URL(event.request.url);if(u.origin!==location.origin)return;event.respondWith(caches.match(event.request).then(r=>r||fetch(event.request).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(c=>c.put(event.request,copy));return resp;}).catch(()=>caches.match('./index.html'))));});
+          JS
+          test -s site/index.html
+          grep -q "Kobus’s Retro Quiz" site/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
