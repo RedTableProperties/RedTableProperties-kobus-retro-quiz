@@ -29,6 +29,30 @@ jobs:
           cat .site/index.b64.* | base64 --decode > index.html.gz
           echo "73c6482a9bcb986b071e20583306015f20b16469d91330ddb3e444d59d882e0a  index.html.gz" | sha256sum --check -
           gzip -dc index.html.gz > site/index.html
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('site/index.html')
+          s = p.read_text()
+          s = s.replace(
+              '<button class="action-btn" id="revealBtn">REVEAL</button>',
+              '<button class="action-btn" id="revealBtn">REVEAL</button>\n            <button class="action-btn" id="skipBtn">NEXT SONG →</button>'
+          )
+          s = s.replace(
+              '<button class="next-btn" id="nextBtn" disabled>NEXT SIGNAL →</button>',
+              '<button class="next-btn" id="nextBtn">NEXT SONG →</button>'
+          )
+          s = s.replace(
+              "$('#revealBtn').disabled=false; $('#nextBtn').disabled=true;",
+              "$('#revealBtn').disabled=false; $('#nextBtn').disabled=false;"
+          )
+          s = s.replace(
+              "$('#playBtn').addEventListener('click',playClip); $('#revealBtn').addEventListener('click',reveal); $('#hintBtn').addEventListener('click',hint); $('#nextBtn').addEventListener('click',newRound);",
+              "$('#playBtn').addEventListener('click',playClip); $('#revealBtn').addEventListener('click',reveal); $('#hintBtn').addEventListener('click',hint); $('#skipBtn').addEventListener('click',()=>newRound()); $('#nextBtn').addEventListener('click',()=>newRound());"
+          )
+          p.write_text(s)
+          PY
+
           cat > site/manifest.webmanifest <<'JSON'
           {
             "name": "Kobus’s Retro Quiz",
@@ -43,7 +67,7 @@ jobs:
           }
           JSON
           cat > site/sw.js <<'JS'
-          const CACHE='kobus-retro-quiz-v2';
+          const CACHE='kobus-retro-quiz-v3';
           const SHELL=['./','./index.html','./manifest.webmanifest'];
           self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
           self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
@@ -51,6 +75,8 @@ jobs:
           JS
           test -s site/index.html
           grep -q "Kobus’s Retro Quiz" site/index.html
+          grep -q 'id="skipBtn"' site/index.html
+          grep -q 'NEXT SONG' site/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
